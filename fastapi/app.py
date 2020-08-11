@@ -24,7 +24,8 @@ cursor = con.cursor()
 @cross_origin()
 def runs_table():
     #dataframe = psql.DataFrame("select * from runs", con)
-    query = "select hash_id, count(*) from runs group by hash_id order by count desc"
+    #query = "select hash_id, count(*) from runs group by hash_id order by count desc"
+    query = "SELECT hash_id, count(*) FROM runs WHERE year_month in ( SELECT MAX(year_month) from runs ) group by hash_id order by count desc"
     df = pd.read_sql_query(query, con)
     df_list = df.values.tolist()
     json_data = jsonpify(df_list)
