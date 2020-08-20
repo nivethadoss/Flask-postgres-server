@@ -67,7 +67,11 @@ def test_msg():
     return json_data
 
     
+@app.route("/ptus", methods = ["get"])
+@cross_origin()
 
+def list_ptus():
+    query =
 
 
 if __name__ == "__main__":
@@ -89,4 +93,32 @@ select mongo_id, stop_if_fail, count(*)from runs, verifications where runs.run_i
 select distinct year_month, count(outcome_msg) from runs where outcome_val = 0 group by runs.year_month, runs.outcome_msg order by runs.year_month asc
 
 select distinct start, count(outcome_msg) from runs where outcome_val = 0 group by runs.start, runs.outcome_msg order by runs.start asc
+
+
+//for global good and bad cunt
+select runs.ptu_id,  count(runs.outcome_val) as good_val, cal_bad_val.bad_val
+from runs, (select count(outcome_val) as bad_val
+		   from runs
+		   where runs.outcome_val != 0 and runs.ptu_id = 1) as cal_bad_val
+where runs.outcome_val = 0 and runs.ptu_id = 1
+group by runs.ptu_id, cal_bad_val.bad_val
+
+
+API'S
+//ptu_id, date, ratio
+select outcome_table.date, outcome_table.ptu_id, round((outcome_table.outcome_zero::decimal / outcome_table.total_test::decimal), 2)as ratio
+from (select single_ptu.date, (count(single_ptu.date)) as Total_test, COUNT(CASE single_ptu.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero, (single_ptu.ptu_id) as ptu_id
+from (select  runs.station_id, runs.outcome_val, (runs.start::date) as date, (ptus.ptu_serial) as ptu_id
+		from runs, ptus
+		where runs.ptu_id = ptus.ptu_id and ptu_serial = 35
+		group by runs.station_id, runs.outcome_val, runs.start, ptus.ptu_serial
+		order by date asc) as single_ptu
+group by single_ptu.date, single_ptu.ptu_id) as outcome_table
+
+
+// ptu_id for each plot
+select ptu_serial from ptus
+
+
+//with order_id and order_qty
 """
