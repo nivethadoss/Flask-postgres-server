@@ -3,7 +3,7 @@ import psycopg2 as pg
 import pandas.io.sql as psql
 import pandas as pd
 from flask_jsonpify import jsonpify
-
+import datetime as dt
 from flask_cors import CORS, cross_origin
 
 app = Flask(__name__, template_folder="template")
@@ -15,6 +15,9 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 con = pg.connect(database="final_postgres", user="postgres", password="postgres", host="localhost", port="5432")
 cursor = con.cursor()
 
+
+   
+"""
 @app.route("/hashid", methods=['get'])
 @cross_origin()
 def runs_table():
@@ -28,7 +31,6 @@ def runs_table():
     return json_data
 
 
-   
 
 @app.route("/test", methods  = ['get'])
 @cross_origin()
@@ -57,28 +59,191 @@ def test_msg():
     query = "select start from runs where hash_id = %s and outcome_val = 0  order by runs.start asc"
     values = request.args.get('id')
     df = pd.read_sql_query(query, con, params = [values])
-   
+    print(df)
     df['new_date'] = [d.date().strftime('%Y-%m-%d') for d in df['start']]
 
     df = df.groupby(['new_date']).agg(count_col=pd.NamedAgg(column="new_date", aggfunc="count")).reset_index()
-   
     df_list = df.values.tolist()
     json_data = jsonpify(df_list)
     return json_data
 
-    
+ """   
+
+#ptu, outcome_ratio on every day basis    
 @app.route("/ptus", methods = ["get"])
 @cross_origin()
 
-def list_ptus():
-    query =
+def ptus_dw_comparision():
+    query = """select outcome_table.date, outcome_table.ptu_id, round((outcome_table.outcome_zero::decimal / outcome_table.total_test::decimal), 2)as ratio
+            from (select single_ptu.date, (count(single_ptu.date)) as Total_test, COUNT(CASE single_ptu.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero, (single_ptu.ptu_id) as ptu_id
+                from (select  runs.station_id, runs.outcome_val, (runs.start::date) as date, (ptus.ptu_serial) as ptu_id
+		        from runs, ptus
+		        where runs.ptu_id = ptus.ptu_id and ptu_serial = 16
+		        group by runs.station_id, runs.outcome_val, runs.start, ptus.ptu_serial
+		        order by date asc) as single_ptu
+            group by single_ptu.date, single_ptu.ptu_id) as outcome_table"""
+    df = pd.read_sql_query(query, con)
+    df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
+    df["Week_Number"] = [d.isocalendar()[1] for d in df["date"]]
+    del df['date']
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
 
+
+#dates between range and ptu_id
+@app.route("/ptu_filter", methods =['get'])
+@cross_origin()
+
+def ptus_daterange():
+
+    query = """ select outcome_table.date, outcome_table.ptu_id, round((outcome_table.outcome_zero::decimal / outcome_table.total_test::decimal), 2)as ratio
+                from (select single_ptu.date, (count(single_ptu.date)) as Total_test, COUNT(CASE single_ptu.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero, (single_ptu.ptu_id) as ptu_id
+                from (select  runs.station_id, runs.outcome_val, (runs.start::date) as date, (ptus.ptu_serial) as ptu_id
+                        from runs, ptus
+                        where runs.ptu_id = ptus.ptu_id and ptu_serial = %s
+                        group by runs.station_id, runs.outcome_val, runs.start, ptus.ptu_serial
+                        order by date asc) as single_ptu
+                group by single_ptu.date, single_ptu.ptu_id) 
+                as outcome_table
+                where outcome_table.date BETWEEN SYMMETRIC %s AND %s
+                order by outcome_table.date asc
+    """
+
+    values0 = request.args.get('ptu_id')
+    values1 = request.args.get('from')
+    values2 = request.args.get('to')
+
+    if values0  == None :
+        
+        values0 = '16'
+        print(values0, values1, values2)
+        df = pd.read_sql_query(query, con, params = [values0, values1, values2])
+        df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
+        del df['date']
+        print(df)
+        df_list = df.values.tolist()
+        json_data = jsonpify(df_list)
+        return json_data
+    elif values1 == None:
+  
+        
+        values1 = '2017-07-03'
+        
+        print(values0, values1, values2)
+        df = pd.read_sql_query(query, con, params = [values0, values1, values2])
+        df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
+        del df['date']
+        print(df)
+        df_list = df.values.tolist()
+        json_data = jsonpify(df_list)
+        return json_data
+
+    elif values2 == None:
+        values2 = '2017-08-30'
+        print(values0, values1, values2)
+        df = pd.read_sql_query(query, con, params = [values0, values1, values2])
+        df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
+        del df['date']
+        print(df)
+        df_list = df.values.tolist()
+        json_data = jsonpify(df_list)
+        return json_data
+
+    else:
+        print(values0, values1, values2)
+        df = pd.read_sql_query(query, con, params = [values0, values1, values2])
+        df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
+        del df['date']
+        print(df)
+        df_list = df.values.tolist()
+        json_data = jsonpify(df_list)
+        return json_data
+    
+@app.route("/ptu_limit", methods =['get'])
+@cross_origin()
+
+def ptus_limit():
+    query = """ select outcome_table.date, outcome_table.ptu_id, round((outcome_table.outcome_zero::decimal / outcome_table.total_test::decimal), 2)as ratio 
+                from (select single_ptu.date, (count(single_ptu.date)) as Total_test, COUNT(CASE single_ptu.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero, (single_ptu.ptu_id) as ptu_id
+                from (select  runs.station_id, runs.outcome_val, (runs.start::date) as date, (ptus.ptu_serial) as ptu_id
+                        from runs, ptus
+                        where runs.ptu_id = ptus.ptu_id and ptu_serial = 16
+                        group by runs.station_id, runs.outcome_val, runs.start, ptus.ptu_serial
+                        order by date asc) as single_ptu
+                group by single_ptu.date, single_ptu.ptu_id) 
+                as outcome_table
+                where outcome_table.date BETWEEN SYMMETRIC '2017-02-02' AND '2017-09-12'
+                order by outcome_table.date asc
+                limit %s
+    """
+    values = request.args.get('limit')
+    df = pd.read_sql_query(query, con, params = [values])
+    df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
+    del df['date']
+    print(df)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+@app.route("/order_id", methods=['get'])
+@cross_origin()
+
+def order_id():
+    query = """
+                select order_details.order_id, order_details.number_of_BS, round((order_details.outcome_zero::decimal / order_details.total::decimal), 2) as ratio
+                from (select order_id, (count(runs.station_id)) as number_of_BS, (count(runs.outcome_val)) as total, COUNT(CASE runs.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero
+                from runs
+                where runs.start::date BETWEEN SYMMETRIC %s and %s
+                group by order_id) as order_details   
+            """
+    values0 = request.args.get('from')
+    values1 = request.args.get('to')
+    df = pd.read_sql_query(query, con, params = [values0, values1]
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+
+
+
+@app.route("/order_id_days", methods=['get'])
+@cross_origin()
+
+def order_id_days():
+    query = """
+            select order_details.order_id, order_details.number_of_BS, round((order_details.outcome_zero::decimal / order_details.total::decimal), 2) as ratio
+            from runs, (select order_id, (count(runs.station_id)) as number_of_BS, (count(runs.outcome_val)) as total, COUNT(CASE runs.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero
+                from runs
+                WHERE runs.start::date > (SELECT MAX(runs.start::date) FROM runs) - interval %s day
+                group by order_id) as order_details
+            """
+    values0 = request.args.get('days')
+    df = pd.read_sql_query(query, con, params = [values0])
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+@app.route("/date_range", methods=['get'])
+@cross_origin()
+
+def date_range():
+    query = """
+                select max(runs.start::date),  min(runs.start::date)
+                from runs
+            """
+    df = pd.read_sql_query(query, con)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
 
 if __name__ == "__main__":
     app.run()
 
 
 """
+
+http://127.0.0.1:5000/ptus?from=2017-02-01?to=2017-09-12
 
 select hash_Id from runs where mongo_Id = ;
 select * from runs where station_id = 
@@ -120,5 +285,34 @@ group by single_ptu.date, single_ptu.ptu_id) as outcome_table
 select ptu_serial from ptus
 
 
-//with order_id and order_qty
+//with order_id and order_qty for particuler date
+select distinct (runs.start::date) as date, order_id, count(runs.station_id)
+from runs, stations
+where stations.station_id = runs.station_id 
+group by runs.order_id, runs.start
+order by date asc
+
+
+// in a date number of order_id stacked bar
+select distinct order_id, runs.start::date as date
+from runs, stations
+where stations.station_id = runs.station_id and runs.start::date = '2017-03-13'
+group by runs.order_id, runs.start
+order by date asc
+
+//order_id, total_number_of_basesattions, ratio of good and total base stations
+select order_details.order_id, order_details.number_of_BS, round((order_details.outcome_zero::decimal / order_details.total::decimal), 2) as ratio
+from (select order_id, (count(runs.station_id)) as number_of_BS, (count(runs.outcome_val)) as total, COUNT(CASE runs.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero
+from runs
+group by order_id) as order_details
+
+
+
+//manufacturer and dates
+select distinct ems, runs.start::date
+from utbs, runs
+where utbs.utb_id = runs.utb_id 
+group by ems, runs.start
+order by runs.start::date desc
+
 """
