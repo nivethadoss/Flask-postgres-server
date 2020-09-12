@@ -17,7 +17,7 @@ cursor = con.cursor()
 
 
    
-"""
+
 @app.route("/hashid", methods=['get'])
 @cross_origin()
 def runs_table():
@@ -30,7 +30,7 @@ def runs_table():
     json_data = jsonpify(df_list)
     return json_data
 
-
+"""
 
 @app.route("/test", methods  = ['get'])
 @cross_origin()
@@ -69,10 +69,64 @@ def test_msg():
 
  """   
 
+#ptu serial id only
+@app.route("/ptu_serial", methods = ["get"])
+@cross_origin()
+
+def ptu_serial():
+    query = """
+                select distinct ptu_serial
+                from ptus
+                order by ptu_serial asc
+            """
+    df = pd.read_sql_query(query, con)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+# for manufacturers
+@app.route("/manufacturer", methods = ["get"])
+@cross_origin()
+
+def base_station_manufacturers():
+    query = """select distinct ems from utbs"""
+    df = pd.read_sql_query(query, con)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+
+# total runs in the databases
+@app.route("/total_runs", methods = ["get"])
+@cross_origin()
+
+def total_runs():
+    query = """select run_id from runs"""
+    df = pd.read_sql_query(query, con)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+
+
+# base stations names in databases
+@app.route("/base_stations", methods= ["get"])
+@cross_origin()
+def base_stations():
+    query = """select distinct hardware from stations"""
+    df = pd.read_sql_query(query, con)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+
+
+
+
+
 #ptu, outcome_ratio on every day basis    
 @app.route("/ptus", methods = ["get"])
 @cross_origin()
-
 def ptus_dw_comparision():
     query = """select outcome_table.date, outcome_table.ptu_id, round((outcome_table.outcome_zero::decimal / outcome_table.total_test::decimal), 2)as ratio
             from (select single_ptu.date, (count(single_ptu.date)) as Total_test, COUNT(CASE single_ptu.outcome_val WHEN 0 THEN 1 ELSE NULL END) as outcome_zero, (single_ptu.ptu_id) as ptu_id
@@ -86,6 +140,7 @@ def ptus_dw_comparision():
     df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
     df["Week_Number"] = [d.isocalendar()[1] for d in df["date"]]
     del df['date']
+    print(df)
     df_list = df.values.tolist()
     json_data = jsonpify(df_list)
     return json_data
@@ -160,6 +215,39 @@ def ptus_daterange():
         json_data = jsonpify(df_list)
         return json_data
     
+
+
+@app.route("/ptu_serial", methods=["get"])
+@cross_origin()
+
+def ptu_serials():
+    query = """select distinct ptu_serial from ptus"""
+    df = pd.read_sql_query(query, con)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# limit the number of runs
 @app.route("/ptu_limit", methods =['get'])
 @cross_origin()
 
@@ -178,6 +266,7 @@ def ptus_limit():
                 limit %s
     """
     values = request.args.get('limit')
+
     df = pd.read_sql_query(query, con, params = [values])
     df["dates"] =  [d.strftime('%Y-%m-%d') for d in df['date']]
     del df['date']
@@ -186,6 +275,8 @@ def ptus_limit():
     json_data = jsonpify(df_list)
     return json_data
 
+
+#
 @app.route("/order_id", methods=['get'])
 @cross_origin()
 
@@ -199,14 +290,14 @@ def order_id():
             """
     values0 = request.args.get('from')
     values1 = request.args.get('to')
-    df = pd.read_sql_query(query, con, params = [values0, values1]
+    df = pd.read_sql_query(query, con, params = [values0, values1])
     df_list = df.values.tolist()
     json_data = jsonpify(df_list)
     return json_data
 
 
 
-
+#order_id in x-axis and y is the ratio of number_of_bs_ok/total number of bs for that order_id
 @app.route("/order_id_days", methods=['get'])
 @cross_origin()
 
@@ -224,6 +315,7 @@ def order_id_days():
     json_data = jsonpify(df_list)
     return json_data
 
+# last and first dates in databases
 @app.route("/date_range", methods=['get'])
 @cross_origin()
 
@@ -236,6 +328,30 @@ def date_range():
     df_list = df.values.tolist()
     json_data = jsonpify(df_list)
     return json_data
+
+
+@app.route("/gantt", methods=['get'])
+@cross_origin()
+
+def gantt():
+    query = """
+           SELECT distinct TO_CHAR(runs.start::date, 'Month') AS "month_manu", TO_CHAR(runs.start::date, 'YYYY') AS "year", ems
+
+            from utbs, runs
+            where utbs.utb_id = runs.utb_id and ems = 'Asteelflash'
+            group by month_manu,year, utbs.ems
+            """
+    df = pd.read_sql_query(query, con)
+    df['month_year'] = df['month_manu'] + df['year']
+    df['month_year'] = df['month_year'].str.replace(' ', '')
+    del df['month_manu']
+    del df['year']
+    print(df)
+    df_list = df.values.tolist()
+    json_data = jsonpify(df_list)
+    return json_data
+
+
 
 if __name__ == "__main__":
     app.run()
