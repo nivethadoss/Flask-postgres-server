@@ -228,25 +228,6 @@ def ptu_serials():
     return json_data
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # limit the number of runs
 @app.route("/ptu_limit", methods =['get'])
 @cross_origin()
@@ -335,17 +316,38 @@ def date_range():
 
 def gantt():
     query = """
-           SELECT distinct TO_CHAR(runs.start::date, 'Month') AS "month_manu", TO_CHAR(runs.start::date, 'YYYY') AS "year", ems
+            select order_id, abs(days), first_date, last_date, month, manufacture
+            from(select (super.o_id) as order_id, (super.last_date - super.first_date ) as days, (super.first_date) as first_date, (super.last_date) as last_date, (super.month) as month, (super.manufacturer) as manufacture
 
-            from utbs, runs
-            where utbs.utb_id = runs.utb_id and ems = 'Asteelflash'
-            group by month_manu,year, utbs.ems
+            from (select distinct (gantt.order_id) as o_id, first_value(gantt.date) over (PARTITION BY gantt.order_id) as first_date, last_value(gantt.date) over (PARTITION BY gantt.order_id) as last_date, (gantt.month_manu) as month, (gantt.ems) as manufacturer     
+                    from(SELECT distinct TO_CHAR(runs.start::date, 'Month') AS "month_manu", TO_CHAR(runs.start::date, 'YYYY') AS "year", ems,  order_id, (runs.start::date) as date
+
+                    from utbs, runs
+                    where utbs.utb_id = runs.utb_id 
+                    group by runs.order_id, month_manu,year, utbs.ems, runs.start) as gantt
+            where date != '1900-01-01') as super) as final
             """
-    df = pd.read_sql_query(query, con)
-    df['month_year'] = df['month_manu'] + df['year']
-    df['month_year'] = df['month_year'].str.replace(' ', '')
-    del df['month_manu']
-    del df['year']
+            # or
+
+    another_query = """
+             select  distinct order_id, abs(days), first_date, last_date, manufacture
+            from(select (super.o_id) as order_id, (super.last_date - super.first_date ) as days, (super.first_date) as first_date, (super.last_date) as last_date, (super.month) as month, (super.manufacturer) as manufacture
+
+            from (select distinct (gantt.order_id) as o_id, first_value(gantt.date) over (PARTITION BY gantt.order_id) as first_date, last_value(gantt.date) over (PARTITION BY gantt.order_id) as last_date, (gantt.month_manu) as month, (gantt.ems) as manufacturer     
+                    from(SELECT distinct TO_CHAR(runs.start::date, 'Month') AS "month_manu", TO_CHAR(runs.start::date, 'YYYY') AS "year", ems,  order_id, (runs.start::date) as date
+
+                    from utbs, runs
+                    where utbs.utb_id = runs.utb_id 
+                    group by runs.order_id, month_manu,year, utbs.ems, runs.start) as gantt
+            where date != '1900-01-01') as super) as final
+            where days not in ('1', '0', '-1')
+            """
+
+    df = pd.read_sql_query(another_query, con)
+    df["start_date"] =  [d.strftime('%Y-%m-%d') for d in df['first_date']]
+    del df['first_date']
+    df["end_date"] =  [d.strftime('%Y-%m-%d') for d in df['last_date']]
+    del df['last_date']
     print(df)
     df_list = df.values.tolist()
     json_data = jsonpify(df_list)
@@ -430,5 +432,15 @@ from utbs, runs
 where utbs.utb_id = runs.utb_id 
 group by ems, runs.start
 order by runs.start::date desc
+
+
+//gantt
+select distinct gantt.order_id, first_value(gantt.date) over (PARTITION BY gantt.order_id) as first_date, last_value(gantt.date) over (PARTITION BY gantt.order_id) as last_date
+from(SELECT distinct TO_CHAR(runs.start::date, 'Month') AS "month_manu", TO_CHAR(runs.start::date, 'YYYY') AS "year", ems,  order_id, (runs.start::date) as date
+
+            from utbs, runs
+            where utbs.utb_id = runs.utb_id 
+            group by runs.order_id, month_manu,year, utbs.ems, runs.start) as gantt
+where date != '1900-01-01' and order_id = 'G1_000005-02'
 
 """
